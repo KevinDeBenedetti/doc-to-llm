@@ -1,27 +1,13 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
-from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from langchain.chains import LLMChain
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 
-# Add import for settings
-from src.shared.config import config
-from src.shared.ollama import translate_text, list_ollama_models
+from src.utils.config import config
+from src.services.ollama import translate_text, list_ollama_models
+from src.translator.schemas import TranslationRequest, TranslationResponse
 
 router = APIRouter()
-
-# Pydantic models
-class TranslationRequest(BaseModel):
-    content: str = Field(..., description="Markdown content to translate")
-    source_language: str = Field(..., description="Source language")
-    target_language: str = Field(..., description="Target language")
-    model_name: str = Field(default="gpt-oss", description="Model to use")
-
-class TranslationResponse(BaseModel):
-    translated_content: str
-    source_language: str
-    target_language: str
-    model_used: str
 
 # LangChain configuration
 def get_translation_chain(model_name="gpt-oss"):

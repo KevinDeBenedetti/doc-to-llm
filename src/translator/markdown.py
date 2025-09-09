@@ -1,11 +1,8 @@
 import re
 from datetime import datetime
-from typing import Tuple, List, Dict
-import httpx
+from typing import Dict
 import yaml
-# FIXME : verify if marked is necessary
-from ..utils.ollama import check_ollama_health, translate_text
-# Import OLLAMA_URL, MODEL, DEFAULT_lANG, language_settings
+from src.services.ollama import check_ollama_health, translate_text
 
 FRONTMATTER = re.compile(r'^(---\n[\s\S]*?\n---)\n?', re.MULTILINE)
 
