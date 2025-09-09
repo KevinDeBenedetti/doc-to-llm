@@ -2,7 +2,7 @@ from typing import Optional, List, Any
 from openai import OpenAI
 # from langchain_openai import ChatOpenAI
 from openai.types import Model
-from app.utils.config import config
+from src.utils.config import config
 from datetime import datetime, timedelta
 
 class AIService:

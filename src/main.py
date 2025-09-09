@@ -1,5 +1,5 @@
 # setup logging as early as possible
-from app.utils.logger import setup_logging
+from src.utils.logger import setup_logging
 setup_logging()
 
 # main imports
@@ -8,11 +8,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 import logging
 
-from app.utils.config import config
+from src.utils.config import config
 
 # routes
-from app.routes.base import base
-from app.routes import translate, translations
+from src.routes.base import base
+from src.routes import translate, translations
 
 app = FastAPI()
 

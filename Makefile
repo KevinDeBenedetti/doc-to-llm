@@ -16,17 +16,17 @@ clean: ## Clean build files and dependencies
 	@echo "Cleaning dev environment..."
 	docker compose down
 	rm -rf .ruff_cache .venv uv.lock server.log
+	uv cache clean
 
 setup: ## Start the development api
 	@echo "Setup api..."
-		uv venv --clear && \
-		source .venv/bin/activate && \
-		uv sync --no-cache && \
-		uv cache clean
+	uv venv --clear && \
+	source .venv/bin/activate && \
+	uv sync --no-cache
 
 start-dev: clean setup ## Start the development environment with upgrade
 	@echo "Start dev environment (with upgrade)..."
-	uv run fastapi dev
+	uv run fastapi dev src/main.py
 
 start: clean setup ## Start the development environment
 	@echo "Start dev environment (no upgrade)..."

@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.services.ai import AIService
+from src.services.ai import AIService
 
 base = APIRouter()
 

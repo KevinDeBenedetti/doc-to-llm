@@ -2,7 +2,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import PlainTextResponse
 from enum import Enum
 
-from app.services.ollama import translate_text, list_ollama_models
+from src.services.ollama import translate_text, list_ollama_models
 
 DEFAULT_MODEL = "gemma3"
 

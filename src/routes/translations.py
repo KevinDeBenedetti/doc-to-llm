@@ -5,7 +5,7 @@ from langchain.chains import LLMChain
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 
 # Add import for settings
-from app.utils.config import config
+from src.utils.config import config
 
 
 router = APIRouter()
