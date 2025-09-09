@@ -1,6 +1,7 @@
-from typing import Optional, List, Any
-# from langchain_openai import ChatOpenAI
+from openai import OpenAI
 from openai.types import Model
+
+from typing import Optional, List, Any
 from datetime import datetime, timedelta
 
 from src.shared.config import config
