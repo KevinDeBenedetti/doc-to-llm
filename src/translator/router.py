@@ -5,8 +5,8 @@ from langchain.chains import LLMChain
 from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 
 # Add import for settings
-from src.utils.config import config
-
+from src.shared.config import config
+from src.shared.ollama import translate_text, list_ollama_models
 
 router = APIRouter()
 
@@ -97,3 +97,36 @@ async def translate_file(
         return await translate(translation_req)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error translating file: {str(e)}")
+
+
+from fastapi.responses import PlainTextResponse
+
+from enum import Enum
+
+DEFAULT_MODEL = "gemma3"
+
+class StaticOllamaModels(str, Enum):
+    gemma3 = "gemma3:latest"
+    gemma3_1b = "gemma3:1b"
+
+@router.post("/upload", response_class=PlainTextResponse)
+async def translate_upload(
+    file: UploadFile = File(...),
+    target_lang: str = Form(...),
+    model: StaticOllamaModels = Form(DEFAULT_MODEL)
+):
+    # Verify extension
+    if not file.filename.endswith('.md'):
+        raise HTTPException(status_code=400, detail="Only markdown files are supported")
+
+    # Read the content
+    content = (await file.read()).decode('utf-8')
+
+    try:
+        translated = translate_text(content, target_lang, model.value )
+    except ConnectionError as ce:
+        raise HTTPException(status_code=503, detail=str(ce))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Translation failed: {e}")
+
+    return translated

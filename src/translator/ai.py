@@ -1,9 +1,9 @@
 from typing import Optional, List, Any
-from openai import OpenAI
 # from langchain_openai import ChatOpenAI
 from openai.types import Model
-from src.utils.config import config
 from datetime import datetime, timedelta
+
+from src.shared.config import config
 
 class AIService:
     _models_cache = None    

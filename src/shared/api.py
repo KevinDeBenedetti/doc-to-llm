@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from src.services.ai import AIService
+from src.translator.ai import AIService
 
 base = APIRouter()
 
