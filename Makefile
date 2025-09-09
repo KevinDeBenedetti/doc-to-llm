@@ -15,7 +15,7 @@ lint: ## Lint Code
 clean: ## Clean build files and dependencies
 	@echo "Cleaning dev environment..."
 	docker compose down
-	rm -rf .ruff_cache .venv uv.lock
+	rm -rf .ruff_cache .venv uv.lock server.log
 
 setup: ## Start the development api
 	@echo "Setup api..."
