@@ -5,8 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
-from src.routes.base import base
-from src.routes import translator
+from src.routes import openai, translate, format
 
 app = FastAPI()
 
@@ -18,8 +17,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(base)
-app.include_router(translator.router)
+app.include_router(openai.router)
+app.include_router(translate.router)
+app.include_router(format.router)
 
 @app.get("/")
 def read_root():

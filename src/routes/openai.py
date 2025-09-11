@@ -2,10 +2,13 @@ from fastapi import APIRouter
 
 from src.services.openai import OpenAIService
 
-base = APIRouter()
+router = APIRouter(
+    prefix="/openai",
+    tags=["OpenAI"]
+)
 
-@base.get(
-    "/openai/health",
+@router.get(
+    "/health",
     summary="Check OpenAI Service Health",
     description="Returns the health status of the OpenAI service to ensure it is operational."
 )
@@ -13,8 +16,8 @@ async def get_openai_health():
     service = OpenAIService()
     return await service.health_check()
 
-@base.get(
-    "/openai/models",
+@router.get(
+    "/models",
     summary="Get Available OpenAI Models",
     description="Returns a list of available OpenAI models that can be used for requests."
 )
