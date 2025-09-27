@@ -11,6 +11,4 @@ python3 upgrade_pyproject.py
 ```
 
 # TODO : 
-# - Add lint for python (ruff)
-# - Add husky for pre-commit hooks
 # - Add pytest for testing
