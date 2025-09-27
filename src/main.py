@@ -1,11 +1,10 @@
-from src.utils.logger import setup_logging
-setup_logging()
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-
+from src.utils.logger import setup_logging
 from src.routes import openai, translate, format
+
+setup_logging()
 
 app = FastAPI()
 
@@ -20,6 +19,7 @@ app.add_middleware(
 app.include_router(openai.router)
 app.include_router(translate.router)
 app.include_router(format.router)
+
 
 @app.get("/")
 def read_root():
