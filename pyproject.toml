@@ -22,5 +22,6 @@ upgrade = true
 
 [dependency-groups]
 dev = [
+    "ruff>=0.13.2",
     "tomli-w>=1.2.0",
 ]

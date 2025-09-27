@@ -36,3 +36,7 @@ start: clean setup ## Start the development environment
 upgrade: clean setup ## Upgrade api dependencies
 	@echo "Upgrade api..."
 	uv run python upgrade_pyproject.py
+
+lint:
+	uv run ruff check --fix && \
+	uv run ruff format
