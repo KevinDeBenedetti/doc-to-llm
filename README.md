@@ -12,3 +12,5 @@ python3 upgrade_pyproject.py
 
 # TODO : 
 # - Add pytest for testing
+# - Add a database (sqlite)
+# - Add models & schemas for pydantic

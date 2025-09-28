@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-from src.utils.logger import setup_logging
+from src.core.logger import setup_logging
 from src.routes import openai, translate, format
 
 setup_logging()
