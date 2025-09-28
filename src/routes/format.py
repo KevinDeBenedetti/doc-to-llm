@@ -5,7 +5,7 @@ from langchain.text_splitter import MarkdownTextSplitter
 
 # Utiliser le service OpenAI configuré
 from src.services.openai import OpenAIService
-from src.utils.config import config
+from src.core.config import settings
 import json
 import asyncio
 import re
@@ -246,7 +246,7 @@ async def format_doc(
         word_count = len(content_str.split())
 
         # Créer un résumé simple
-        model_name = config.model_config or "AI"
+        model_name = settings.openai_model or "AI"
         summary = f"Document formaté avec {model_name}: {len(sections)} sections et {word_count} mots"
 
         return DocumentResponse(
@@ -288,7 +288,7 @@ async def format_doc_text(request: DocumentRequest):
         word_count = len(content.split())
 
         # Créer un résumé
-        model_name = config.model_config or "AI"
+        model_name = settings.openai_model or "AI"
         summary = f"Document formaté avec {model_name}: {len(sections)} sections et {word_count} mots"
 
         return DocumentResponse(
@@ -479,7 +479,7 @@ async def enhance_content_with_ai_streaming(content: str) -> AsyncGenerator[str,
             )
             return
 
-        model_name = config.model_config or "AI"
+        model_name = settings.openai_model or "AI"
         yield (
             json.dumps(
                 {
@@ -547,7 +547,7 @@ async def process_document_streaming(
     content: str, clean: bool = True, enhance: bool = True
 ) -> AsyncGenerator[str, None]:
     """Traite un document complet en streaming avec AI"""
-    model_name = config.model_config or "AI"
+    model_name = settings.openai_model
     yield (
         json.dumps(
             {

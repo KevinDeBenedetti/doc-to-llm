@@ -9,17 +9,16 @@ from langchain.prompts import (
     SystemMessagePromptTemplate,
 )
 
-from src.utils.config import config
+from src.core.config import settings
 from src.services.ollama import translate_text
 from src.translator.schemas import TranslationRequest, TranslationResponse
 
 router = APIRouter()
 
 
-# LangChain configuration
 def get_translation_chain(model_name="gpt-oss"):
     llm = ChatOpenAI(
-        temperature=0.4, model_name=model_name, openai_api_key=config.openai_api_key
+        temperature=0.4, model_name=model_name, openai_api_key=settings.openai_api_key
     )
 
     system_template = """You are a professional translator specialized in technical documentation and Markdown."""

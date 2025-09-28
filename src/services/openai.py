@@ -1,30 +1,40 @@
 from openai import AsyncOpenAI
 from typing import List, Dict
-from src.utils.config import config
+from src.core.config import settings
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class OpenAIService:
     def __init__(self):
-        self.config = config
-        self.ai_provider = self.config.ai_provider.lower()
+        self.config = settings
         self.api_key = self.config.openai_api_key
         self.base_url = self.config.openai_base_url
-        self.model = self.config.model_config
+        self.model = self.config.openai_model
 
-        # Initialize OpenAI client with new v1.0+ API
         self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
 
     async def health_check(self) -> Dict[str, any]:
-        """
-        Health check OpenAI service
-        Returns status and connection information
-        """
         try:
-            # Test API connection by listing models
             response = await self.client.models.list()
+
+            client_base_url = None
+            if getattr(self, "base_url", None):
+                client_base_url = self.base_url
+            else:
+                client_base_url = (
+                    getattr(self.client, "base_url", None)
+                    or getattr(self.client, "api_base", None)
+                    or getattr(getattr(self.client, "_client", None), "base_url", None)
+                    or getattr(getattr(self.client, "_client", None), "api_base", None)
+                )
+
+            logger.info(f"Health check response: {client_base_url}")
+
             return {
                 "status": "healthy",
-                "provider": self.ai_provider,
                 "model": self.model,
                 "base_url": self.base_url,
                 "models_available": len(response.data) if response.data else 0,
@@ -32,7 +42,6 @@ class OpenAIService:
         except Exception as e:
             return {
                 "status": "unhealthy",
-                "provider": self.ai_provider,
                 "error": str(e),
                 "base_url": self.base_url,
             }
