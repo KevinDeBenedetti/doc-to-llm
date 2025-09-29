@@ -10,7 +10,13 @@
 python3 upgrade_pyproject.py
 ```
 
-# TODO : 
-# - Add pytest for testing
-# - Add a database (sqlite)
-# - Add models & schemas for pydantic
+## TODO :
+
+- Add pytest for testing
+- Add a database (sqlite)
+
+## Features :
+
+- PostgreSQL database integration using SQLAlchemy
+- User authentication with supabase
+- File upload and processing
