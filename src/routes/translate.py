@@ -1,7 +1,7 @@
 import logging
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from src.services.translate import TranslateService
-from src.schemas import TranslationRequest, TranslationResponse
+from src.schemas.translate import TranslateRequest, TranslateResponse
 
 router = APIRouter()
 
@@ -9,7 +9,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-@router.post("/translate-file", response_model=TranslationResponse)
+@router.post("/translate-file", response_model=TranslateResponse)
 async def translate_file(
     file: UploadFile = File(...),
     source_language: str = Form(...),
@@ -21,7 +21,7 @@ async def translate_file(
         logger.info(f"File content: {content[:100]}")
         content_str = content.decode("utf-8")
 
-        translation_req = TranslationRequest(
+        translation_req = TranslateRequest(
             content=content_str,
             source_language=source_language,
             target_language=target_language,
@@ -36,7 +36,7 @@ async def translate_file(
             model_name=translation_req.model_name,
         )
 
-        return TranslationResponse(
+        return TranslateResponse(
             translated_content=translated_text,
             source_language=translation_req.source_language,
             target_language=translation_req.target_language,
