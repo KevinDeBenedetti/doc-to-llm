@@ -1,6 +1,6 @@
 import logging
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
-from src.services.llm_service import LLMService
+from src.services.translate import TranslateService
 from src.schemas import TranslationRequest, TranslationResponse
 
 router = APIRouter()
@@ -28,8 +28,8 @@ async def translate_file(
             model_name=model_name,
         )
 
-        llm_service = LLMService(model_name=translation_req.model_name)
-        translated_text = await llm_service.translate_markdown(
+        translate_service = TranslateService(model_name=translation_req.model_name)
+        translated_text = await translate_service.translate_markdown(
             content=translation_req.content,
             source_language=translation_req.source_language,
             target_language=translation_req.target_language,
