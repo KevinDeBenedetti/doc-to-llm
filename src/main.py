@@ -17,7 +17,7 @@ app.add_middleware(
 )
 
 app.include_router(openai.router)
-app.include_router(translate.router)
+app.include_router(translate.router, tags=["Translation"])
 app.include_router(format.router)
 
 
