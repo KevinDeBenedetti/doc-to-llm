@@ -1,17 +1,26 @@
 name: CI – Linting
 
 on:
-  pull_request:
-    branches:
-      - main
+  workflow_call:
+    inputs:
+      PYTHON_VERSION:
+        description: Python version used to run lint
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      PYTHON_VERSION:
+        description: Python version used to run lint
+        required: true
+        type: string
+        default: 3.X
 
 jobs:
-  lint-server:
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        python-version: ["3.13"]
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout code
@@ -22,8 +31,8 @@ jobs:
         with:
           version: "latest"
 
-      - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
+      - name: Set up Python ${{ inputs.PYTHON_VERSION }}
+        run: uv python install ${{ inputs.PYTHON_VERSION }}
 
       - name: Install dependencies
         working-directory: ./apps/server
