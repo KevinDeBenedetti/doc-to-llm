@@ -10,20 +10,31 @@ help: ## Show helper
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-25s\033[0m %s\n", $$1, $$2}'
 
 clean: ## Clean build files and dependencies
-	@echo "Cleaning dev environment..."
+	@echo "Cleaning..."
 	docker compose down
-	rm -rf .ruff_cache .venv uv.lock server.log
-	uv cache clean
+
+	@echo "Removing all..."
+	@find . -type d -name "node_modules" -prune -print -exec rm -rf {} +
+	@find . -type d -name "__pycache__" -prune -print -exec rm -rf {} +
+	@find . -type d -name ".pytest_cache" -prune -print -exec rm -rf {} +
+	@find . -type d -name ".ruff_cache" -prune -print -exec rm -rf {} +
+	@find . -type d -name ".venv" -prune -print -exec rm -rf {} +
+	@find . -type f -name "server.log" -prune -print -exec rm -r {} +
+
+	@echo "Clean cache all..."
+	cd apps/server && \
+		uv cache clean
 
 setup: ## Start the development api
-	@echo "Setup api..."
-	uv venv --clear && \
-	source .venv/bin/activate && \
-	uv sync --no-cache
+	@echo "Setting up server..."
+	cd apps/server && \
+		uv venv --clear && \
+		uv sync --no-cache
 
-start-dev: clean setup ## Start the development environment with upgrade
+start-server: setup ## Start the development environment with upgrade
 	@echo "Start dev environment (with upgrade)..."
-	uv run fastapi dev src/main.py
+	cd apps/server && \
+		uv run fastapi dev src/main.py
 
 start: clean setup ## Start the development environment
 	@echo "Start dev environment (no upgrade)..."
@@ -32,9 +43,11 @@ start: clean setup ## Start the development environment
 
 upgrade: clean setup ## Upgrade api dependencies
 	@echo "Upgrade api..."
-	uv run python upgrade_pyproject.py
+	cd apps/server && \
+		uv run python upgrade_pyproject.py
 
-lint: clean setup ## Lint code
+lint: ## Lint code
 	@echo "Linting code..."
-	uv run ruff check --fix && \
-	uv run ruff format
+	cd apps/server && \
+		uv run ruff check --fix && \
+		uv run ruff format
