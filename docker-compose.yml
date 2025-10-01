@@ -5,10 +5,11 @@ services:
     env_file:
       - .env
     build:
-      context: .
+      context: apps/server
       dockerfile: Dockerfile
+      target: dev
     ports:
       - "8000:8000"
     volumes:
-      - ./src:/app/src
+      - ./apps/server:/src
     restart: always
