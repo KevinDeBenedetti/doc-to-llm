@@ -14,12 +14,15 @@ clean: ## Clean build files and dependencies
 	docker compose down
 
 	@echo "Removing all..."
-	@find . -type d -name "node_modules" -prune -print -exec rm -rf {} +
 	@find . -type d -name "__pycache__" -prune -print -exec rm -rf {} +
 	@find . -type d -name ".pytest_cache" -prune -print -exec rm -rf {} +
 	@find . -type d -name ".ruff_cache" -prune -print -exec rm -rf {} +
 	@find . -type d -name ".venv" -prune -print -exec rm -rf {} +
 	@find . -type f -name "server.log" -prune -print -exec rm -r {} +
+
+	@echo "Removing all..."
+	@find . -type d -name "node_modules" -prune -print -exec rm -rf {} +
+	@find . -type d -name ".nuxt" -prune -print -exec rm -rf {} +
 
 	@echo "Clean cache all..."
 	cd apps/server && \
@@ -30,9 +33,13 @@ setup: ## Start the development api
 	cd apps/server && \
 		uv venv --clear && \
 		uv sync --no-cache
+		
+	@echo "Setting up docus..."
+	cd apps/docus && \
+		pnpm install
 
 start-server: setup ## Start the development environment with upgrade
-	@echo "Start dev environment (with upgrade)..."
+	@echo "Start dev environment..."
 	cd apps/server && \
 		uv run fastapi dev src/main.py
 
@@ -45,6 +52,9 @@ upgrade: clean setup ## Upgrade api dependencies
 	@echo "Upgrade api..."
 	cd apps/server && \
 		uv run python upgrade_pyproject.py
+
+	cd apps/docus && \
+		pnpm up --latest
 
 lint: ## Lint code
 	@echo "Linting code..."

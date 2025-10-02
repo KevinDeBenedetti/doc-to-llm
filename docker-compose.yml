@@ -1,7 +1,21 @@
 services:
+  nuxt:
+    container_name: docus
+    restart: always
+    build:
+      context: apps/docus
+      dockerfile: Dockerfile
+      target: dev
+    env_file:
+      - .env
+    ports:
+      - "8001:3000"
+    volumes:
+      - ./apps/docus:/app
+      - /app/node_modules
+
   api:
     container_name: doc-to-llm
-    platform: linux/amd64
     env_file:
       - .env
     build:
