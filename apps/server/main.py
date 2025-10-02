@@ -10,10 +10,12 @@ from src.core import database
 
 setup_logging()
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     database.create_db_and_tables()
     yield
+
 
 app = FastAPI(
     title="Doc To Llm",
@@ -30,7 +32,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(openai.router,prefix="/openai", tags=["OpenAI"])
+app.include_router(openai.router, prefix="/openai", tags=["OpenAI"])
 app.include_router(translate.router, tags=["Translation"])
 app.include_router(format.router, prefix="/format", tags=["Format"])
 
