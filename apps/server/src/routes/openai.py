@@ -2,7 +2,7 @@ from fastapi import APIRouter
 
 from src.services.openai import OpenAIService
 
-router = APIRouter(prefix="/openai", tags=["OpenAI"])
+router = APIRouter()
 
 
 @router.get(

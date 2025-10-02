@@ -36,7 +36,7 @@ start-server: setup ## Start the development environment with upgrade
 	cd apps/server && \
 		uv run fastapi dev src/main.py
 
-start: clean setup ## Start the development environment
+start: setup ## Start the development environment
 	@echo "Start dev environment (no upgrade)..."
 	docker compose build --no-cache
 	docker compose up -d
