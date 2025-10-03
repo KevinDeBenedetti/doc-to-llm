@@ -33,20 +33,20 @@ setup: ## Start the development api
 	cd apps/server && \
 		uv venv --clear && \
 		uv sync --no-cache
-		
+
+setup-docus: ## Setup docus
 	@echo "Setting up docus..."
 	cd apps/docus && \
 		pnpm install
 
-start-server: setup ## Start the development environment with upgrade
+start: setup setup-docus ## Start the development environment
 	@echo "Start dev environment..."
-	cd apps/server && \
-		uv run fastapi dev src/main.py
-
-start: setup ## Start the development environment
-	@echo "Start dev environment (no upgrade)..."
 	docker compose build --no-cache
 	docker compose up -d
+
+	@echo "Start docus..."
+	cd apps/docus && \
+		pnpm run dev
 
 upgrade: clean setup ## Upgrade api dependencies
 	@echo "Upgrade api..."
