@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import main
+from src.routes import format as format_routes
 from src.routes import openai as openai_routes
 from src.routes import translate as translate_routes
 from src.services import vitepress
@@ -220,3 +221,23 @@ def test_translate_file_returns_translation(client, monkeypatch):
         "model_used": "m",
     }
     assert calls["model"] == "m"
+
+
+def test_failures_do_not_expose_exception_text(client, monkeypatch):
+    def boom(*args, **kwargs):
+        raise RuntimeError("secret internal detail")
+
+    async def boom_stream(*args, **kwargs):
+        raise RuntimeError("secret internal detail")
+        yield
+
+    monkeypatch.setattr(format_routes, "format_document", boom)
+    monkeypatch.setattr(format_routes, "iter_format_document", boom_stream)
+
+    plain = client.post("/format/doc/text", json={"content": "x"})
+    stream = client.post("/format/doc/text/stream", json={"content": "x"})
+
+    assert plain.status_code == 500
+    assert "secret" not in plain.text
+    assert stream_events(stream)[-1]["status"] == "error"
+    assert "secret" not in stream.text
