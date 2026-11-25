@@ -1,8 +1,9 @@
-from openai import AsyncOpenAI
-from typing import List, Dict
-from src.core.config import settings
-
 import logging
+from typing import Any
+
+from openai import AsyncOpenAI
+
+from src.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +17,7 @@ class OpenAIService:
 
         self.client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
 
-    async def health_check(self) -> Dict[str, any]:
+    async def health_check(self) -> dict[str, Any]:
         try:
             response = await self.client.models.list()
 
@@ -46,7 +47,7 @@ class OpenAIService:
                 "base_url": self.base_url,
             }
 
-    async def get_models(self) -> List[Dict[str, any]]:
+    async def get_models(self) -> list[dict[str, Any]]:
         """
         Get available OpenAI models
         Returns list of available models with their information
@@ -71,8 +72,8 @@ class OpenAIService:
             raise Exception(f"Failed to retrieve models: {str(e)}")
 
     async def chat_completion(
-        self, messages: List[Dict[str, str]], **kwargs
-    ) -> Dict[str, any]:
+        self, messages: list[dict[str, str]], **kwargs
+    ) -> dict[str, Any]:
         """
         Create a chat completion using OpenAI API
         """
@@ -84,7 +85,7 @@ class OpenAIService:
         except Exception as e:
             raise Exception(f"Chat completion failed: {str(e)}")
 
-    async def text_completion(self, prompt: str, **kwargs) -> Dict[str, any]:
+    async def text_completion(self, prompt: str, **kwargs) -> dict[str, Any]:
         """
         Create a text completion using OpenAI API
         """

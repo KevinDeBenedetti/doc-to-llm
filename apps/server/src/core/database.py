@@ -1,7 +1,10 @@
 import os
-from sqlalchemy import create_engine
-from sqlalchemy.orm import scoped_session, sessionmaker, declarative_base
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
+
+# Kept on purpose: the scaffold for the planned SQLite storage. No model uses
+# `Base` yet, so `create_db_and_tables` creates nothing for now.
 SQLALCHEMY_DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./database.db")
 
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
@@ -14,7 +17,6 @@ SessionLocal = sessionmaker(
     autocommit=False, autoflush=False, bind=engine, expire_on_commit=False
 )
 Base = declarative_base()
-Session = scoped_session(SessionLocal)
 
 
 def get_db():
@@ -26,7 +28,4 @@ def get_db():
 
 
 def create_db_and_tables():
-    try:
-        Base.metadata.create_all(bind=engine)
-    except Exception:
-        raise
+    Base.metadata.create_all(bind=engine)

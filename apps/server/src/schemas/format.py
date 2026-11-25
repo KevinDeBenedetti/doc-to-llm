@@ -1,11 +1,10 @@
 from pydantic import BaseModel
-from typing import Optional
 
 
 class DocumentRequest(BaseModel):
     content: str
-    enhance: Optional[bool] = True
-    clean: Optional[bool] = True
+    enhance: bool = True
+    clean: bool = True
 
 
 class DocumentResponse(BaseModel):
@@ -13,3 +12,4 @@ class DocumentResponse(BaseModel):
     summary: str
     word_count: int
     sections: list[str]
+    warnings: list[str] = []
