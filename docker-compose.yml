@@ -10,5 +10,6 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./apps/server:/src
+      # Live code for --reload; the image keeps its virtualenv in /opt/venv.
+      - ./apps/server:/app
     restart: always

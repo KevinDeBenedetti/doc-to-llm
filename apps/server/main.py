@@ -18,7 +18,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Doc To Llm",
+    title="doc-to-llm",
     description="A FastAPI application for document translation and language model interaction.",
     version="0.0.1",
     lifespan=lifespan,

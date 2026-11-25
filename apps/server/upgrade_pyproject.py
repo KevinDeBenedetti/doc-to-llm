@@ -19,6 +19,7 @@ Notes:
     - Removes duplicate version constraints
 """
 
+import re
 import subprocess
 import sys
 import tomllib
@@ -60,7 +61,8 @@ def run_uv_lock_update() -> bool:
 
 def clean_dependency(dep: str) -> tuple[str, str]:
     """Clean dependency string and return package name and extras."""
-    base = dep.split(">=")[0].strip()
+    # The name and extras end at the first version operator, marker or space.
+    base = re.split(r"[<>=!~;@\s]", dep, maxsplit=1)[0].strip()
 
     # Extract extras if present
     if "[" in base:

@@ -1,6 +1,4 @@
-PYTHONPATH=$(PWD)
-
-.PHONY: help setup apps start dev build clean
+.PHONY: help clean setup start upgrade lint test
 .DEFAULT_GOAL := help
 
 help: ## Show helper
@@ -27,18 +25,17 @@ clean: ## Clean build files and dependencies
 	cd apps/server && \
 		uv cache clean
 
-setup: ## Start the development api
+setup: ## Create the local venv and install the server dependencies
 	@echo "Setting up server..."
 	cd apps/server && \
 		uv venv --clear && \
 		uv sync --no-cache
 
-start: setup ## Start the development environment
+start: ## Build and start the development container
 	@echo "Start dev environment..."
-	docker compose build --no-cache
-	docker compose up -d
+	docker compose up -d --build
 
-upgrade: clean setup ## Upgrade api dependencies
+upgrade: clean setup ## Upgrade the server dependencies
 	@echo "Upgrade api..."
 	cd apps/server && \
 		uv run python upgrade_pyproject.py
@@ -48,3 +45,8 @@ lint: ## Lint code
 	cd apps/server && \
 		uv run ruff check --fix && \
 		uv run ruff format
+
+test: ## Run the server tests
+	@echo "Running tests..."
+	cd apps/server && \
+		uv run pytest

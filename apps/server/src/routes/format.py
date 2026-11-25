@@ -1,20 +1,65 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Response
+import json
+import logging
+from collections.abc import AsyncGenerator
+from dataclasses import asdict
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import StreamingResponse
 
+from src.routes.uploads import TextUpload, read_markdown_upload
 from src.schemas.format import DocumentRequest, DocumentResponse
-from src.services.openai import OpenAIService
-from src.core.config import settings
-from src.services.vitepress import (
-    enhance_content_with_ai,
-    extract_sections,
-    format_vitepress_markdown,
-    add_vitepress_utilities,
-    process_document_streaming,
-)
+from src.services.vitepress import FormatResult, format_document, iter_format_document
 
 router = APIRouter()
 
-openai_service = OpenAIService()
+logger = logging.getLogger(__name__)
+
+
+async def run_pipeline(content: str, clean: bool, enhance: bool) -> FormatResult:
+    try:
+        return await format_document(content, clean=clean, enhance=enhance)
+    except Exception as e:
+        logger.exception("Formatting failed")
+        raise HTTPException(
+            status_code=500, detail=f"Erreur lors du formatage : {e}"
+        ) from e
+
+
+def stream_pipeline(content: str, clean: bool, enhance: bool) -> StreamingResponse:
+    async def generate() -> AsyncGenerator[str, None]:
+        try:
+            async for event in iter_format_document(content, clean, enhance):
+                yield json.dumps(event) + "\n"
+        except Exception as e:
+            # The response has started: report the failure as the last event.
+            logger.exception("Streaming formatting failed")
+            yield (
+                json.dumps(
+                    {
+                        "status": "error",
+                        "message": f"Erreur lors du formatage streaming : {e}",
+                    }
+                )
+                + "\n"
+            )
+
+    return StreamingResponse(
+        generate(),
+        media_type="application/x-ndjson",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
+    )
+
+
+def markdown_response(result: FormatResult, filename: str) -> Response:
+    return Response(
+        content=result.formatted_content,
+        media_type="text/plain; charset=utf-8",
+        headers={
+            "Content-Disposition": f"inline; filename*=UTF-8''{quote(filename)}",
+            "X-Format-Warnings": str(len(result.warnings)),
+        },
+    )
 
 
 @router.post(
@@ -24,49 +69,12 @@ openai_service = OpenAIService()
     description="Nettoie et améliore la documentation markdown VitePress avec AI",
 )
 async def format_doc(
-    file: UploadFile = File(...), enhance: bool = True, clean: bool = True
+    upload: TextUpload = Depends(read_markdown_upload),
+    enhance: bool = True,
+    clean: bool = True,
 ):
-    try:
-        # Vérifier le type de fichier
-        if not file.filename.endswith(".md"):
-            raise HTTPException(
-                status_code=400, detail="Le fichier doit être un fichier markdown (.md)"
-            )
-
-        # Lire le contenu
-        content = await file.read()
-        content_str = content.decode("utf-8")
-
-        # Formater le contenu VitePress
-        if clean:
-            content_str = format_vitepress_markdown(content_str)
-            content_str = add_vitepress_utilities(content_str)
-
-        # Améliorer avec AI
-        if enhance:
-            content_str = await enhance_content_with_ai(content_str)
-
-        # Extraire les sections
-        sections = extract_sections(content_str)
-
-        # Compter les mots
-        word_count = len(content_str.split())
-
-        # Créer un résumé simple
-        model_name = settings.openai_model or "AI"
-        summary = f"Document formaté avec {model_name}: {len(sections)} sections et {word_count} mots"
-
-        return DocumentResponse(
-            formatted_content=content_str,
-            summary=summary,
-            word_count=word_count,
-            sections=sections,
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Erreur lors du formatage : {str(e)}"
-        )
+    result = await run_pipeline(upload.content, clean, enhance)
+    return DocumentResponse(**asdict(result))
 
 
 @router.post(
@@ -76,39 +84,8 @@ async def format_doc(
     description="Formate du contenu markdown fourni directement en texte avec AI",
 )
 async def format_doc_text(request: DocumentRequest):
-    try:
-        content = request.content
-
-        # Formater le contenu VitePress
-        if request.clean:
-            content = format_vitepress_markdown(content)
-            content = add_vitepress_utilities(content)
-
-        # Améliorer avec AI
-        if request.enhance:
-            content = await enhance_content_with_ai(content)
-
-        # Extraire les sections
-        sections = extract_sections(content)
-
-        # Compter les mots
-        word_count = len(content.split())
-
-        # Créer un résumé
-        model_name = settings.openai_model or "AI"
-        summary = f"Document formaté avec {model_name}: {len(sections)} sections et {word_count} mots"
-
-        return DocumentResponse(
-            formatted_content=content,
-            summary=summary,
-            word_count=word_count,
-            sections=sections,
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Erreur lors du formatage : {str(e)}"
-        )
+    result = await run_pipeline(request.content, request.clean, request.enhance)
+    return DocumentResponse(**asdict(result))
 
 
 @router.post(
@@ -117,34 +94,11 @@ async def format_doc_text(request: DocumentRequest):
     description="Formate la documentation markdown VitePress avec AI et streaming en temps réel",
 )
 async def format_doc_stream(
-    file: UploadFile = File(...), enhance: bool = True, clean: bool = True
+    upload: TextUpload = Depends(read_markdown_upload),
+    enhance: bool = True,
+    clean: bool = True,
 ):
-    try:
-        # Vérifier le type de fichier
-        if not file.filename.endswith(".md"):
-            raise HTTPException(
-                status_code=400, detail="Le fichier doit être un fichier markdown (.md)"
-            )
-
-        # Lire le contenu
-        content = await file.read()
-        content_str = content.decode("utf-8")
-
-        # Créer le générateur de streaming
-        async def generate():
-            async for chunk in process_document_streaming(content_str, clean, enhance):
-                yield chunk
-
-        return StreamingResponse(
-            generate(),
-            media_type="application/x-ndjson",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Erreur lors du formatage streaming : {str(e)}"
-        )
+    return stream_pipeline(upload.content, clean, enhance)
 
 
 @router.post(
@@ -153,24 +107,7 @@ async def format_doc_stream(
     description="Formate du contenu markdown avec AI et streaming en temps réel",
 )
 async def format_doc_text_stream(request: DocumentRequest):
-    try:
-        # Créer le générateur de streaming
-        async def generate():
-            async for chunk in process_document_streaming(
-                request.content, request.clean, request.enhance
-            ):
-                yield chunk
-
-        return StreamingResponse(
-            generate(),
-            media_type="application/x-ndjson",
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Erreur lors du formatage streaming : {str(e)}"
-        )
+    return stream_pipeline(request.content, request.clean, request.enhance)
 
 
 @router.post(
@@ -179,41 +116,12 @@ async def format_doc_text_stream(request: DocumentRequest):
     description="Formate la documentation VitePress et renvoie uniquement le contenu markdown",
 )
 async def format_doc_markdown(
-    file: UploadFile = File(...), enhance: bool = True, clean: bool = True
+    upload: TextUpload = Depends(read_markdown_upload),
+    enhance: bool = True,
+    clean: bool = True,
 ):
-    try:
-        # Vérifier le type de fichier
-        if not file.filename.endswith(".md"):
-            raise HTTPException(
-                status_code=400, detail="Le fichier doit être un fichier markdown (.md)"
-            )
-
-        # Lire le contenu
-        content = await file.read()
-        content_str = content.decode("utf-8")
-
-        # Formater le contenu VitePress
-        if clean:
-            content_str = format_vitepress_markdown(content_str)
-            content_str = add_vitepress_utilities(content_str)
-
-        # Améliorer avec AI
-        if enhance:
-            content_str = await enhance_content_with_ai(content_str)
-
-        # Retourner le markdown comme texte brut
-        return Response(
-            content=content_str,
-            media_type="text/plain; charset=utf-8",
-            headers={
-                "Content-Disposition": f"inline; filename={file.filename}",
-            },
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Erreur lors du formatage : {str(e)}"
-        )
+    result = await run_pipeline(upload.content, clean, enhance)
+    return markdown_response(result, upload.filename)
 
 
 @router.post(
@@ -222,33 +130,5 @@ async def format_doc_markdown(
     description="Formate du contenu markdown et renvoie uniquement le contenu formaté",
 )
 async def format_doc_text_markdown(request: DocumentRequest):
-    try:
-        content = request.content
-
-        # Formater le contenu VitePress
-        if request.clean:
-            content = format_vitepress_markdown(content)
-            content = add_vitepress_utilities(content)
-
-        # Améliorer avec AI
-        if request.enhance:
-            content = await enhance_content_with_ai(content)
-
-        # Retourner le markdown comme texte brut
-        return Response(
-            content=content,
-            media_type="text/plain; charset=utf-8",
-            headers={
-                "Content-Disposition": "inline; filename=formatted.md",
-            },
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Erreur lors du formatage : {str(e)}"
-        )
-
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Erreur lors du formatage : {str(e)}"
-        )
+    result = await run_pipeline(request.content, request.clean, request.enhance)
+    return markdown_response(result, "formatted.md")

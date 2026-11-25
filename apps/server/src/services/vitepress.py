@@ -1,38 +1,29 @@
-import json
+import logging
 import re
-import asyncio
+from collections.abc import AsyncGenerator
+from dataclasses import asdict, dataclass, field
+from functools import lru_cache
+from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
-from typing import AsyncGenerator
 from langchain.text_splitter import MarkdownTextSplitter
 
-from src.services.openai import OpenAIService
 from src.core.config import settings
+from src.services.openai import OpenAIService
 
-openai_service = OpenAIService()
+logger = logging.getLogger(__name__)
 
+# Size of the pieces sent to the AI, in characters. No overlap: each piece is
+# rewritten on its own and the results are joined, so shared text would repeat.
+CHUNK_SIZE = 3000
+MAX_TOKENS = 4000
 
-async def enhance_content_with_ai(content: str) -> str:
-    """Améliore le contenu avec le service AI configuré (gpt-oss)"""
-    try:
-        # Vérifier que le service OpenAI est disponible
-        health = await openai_service.health_check()
-        if health["status"] != "healthy":
-            print(
-                f"Attention: Service AI non disponible ({health.get('error', 'Unknown error')}), amélioration ignorée"
-            )
-            return content
+SYSTEM_PROMPT = """Tu es un expert en rédaction technique et documentation.
+Tu améliores la documentation en français en corrigeant les erreurs grammaticales et orthographiques,
+en améliorant la clarté et la structure, et en ajoutant des exemples pertinents si nécessaire.
+Tu dois absolument préserver le format markdown et les spécificités VitePress."""
 
-        messages = [
-            {
-                "role": "system",
-                "content": """Tu es un expert en rédaction technique et documentation. 
-                Tu améliores la documentation en français en corrigeant les erreurs grammaticales et orthographiques,
-                en améliorant la clarté et la structure, et en ajoutant des exemples pertinents si nécessaire.
-                Tu dois absolument préserver le format markdown et les spécificités VitePress.""",
-            },
-            {
-                "role": "user",
-                "content": f"""Améliore cette documentation en français tout en préservant le format markdown VitePress :
+USER_PROMPT = """Améliore cette documentation en français tout en préservant le format markdown VitePress :
 
 {content}
 
@@ -44,111 +35,124 @@ Instructions :
 5. Préserve le frontmatter YAML
 6. Améliore les titres pour qu'ils soient plus descriptifs
 
-Contenu amélioré :""",
-            },
-        ]
+Contenu amélioré :"""
 
-        response = await openai_service.chat_completion(
-            messages=messages, temperature=0.3, max_tokens=4000
-        )
 
-        enhanced_content = response["choices"][0]["message"]["content"].strip()
-        return enhanced_content
-
-    except Exception as e:
-        # En cas d'erreur AI, retourner le contenu original
-        print(f"Erreur lors de l'amélioration AI: {e}")
-        return content
+@lru_cache
+def get_openai_service() -> OpenAIService:
+    """Create the AI client on first use, so importing this module needs no network setup."""
+    return OpenAIService()
 
 
 def extract_sections(content: str) -> list[str]:
-    """Extrait les sections principales du markdown"""
+    """Extract the Markdown headings, without their `#` markers."""
     sections = []
     for line in content.split("\n"):
         if line.startswith("#"):
-            # Supprimer les # et nettoyer
             section = line.lstrip("#").strip()
             if section:
                 sections.append(section)
     return sections
 
 
+CONTAINER_TITLES = {
+    "tip": "Conseil",
+    "warning": "Attention",
+    "danger": "Important",
+    "info": "Information",
+    "details": "Détails",
+}
+
+FRONTMATTER_DEFAULTS = {"lastUpdated": "true", "editLink": "true"}
+
+
+def split_frontmatter(lines: list[str]) -> tuple[list[str] | None, list[str]]:
+    """Split a leading YAML frontmatter block from the body.
+
+    Only a `---` on the first line opens frontmatter, and the next `---` closes
+    it. Returns (frontmatter lines between the delimiters, body lines), or
+    (None, lines) when there is no complete frontmatter block.
+    """
+    if not lines or lines[0].strip() != "---":
+        return None, lines
+    for i in range(1, len(lines)):
+        if lines[i].strip() == "---":
+            return lines[1:i], lines[i + 1 :]
+    return None, lines
+
+
+def format_frontmatter(frontmatter: list[str]) -> list[str]:
+    """Add the VitePress metadata the frontmatter is missing."""
+    keys = {line.split(":", 1)[0].strip() for line in frontmatter if ":" in line}
+    added = [
+        f"{key}: {value}"
+        for key, value in FRONTMATTER_DEFAULTS.items()
+        if key not in keys
+    ]
+    return ["---", *frontmatter, *added, "---"]
+
+
+def format_container(line: str) -> str:
+    """Give a VitePress container without a custom title a default one."""
+    parts = line.strip().split(" ")
+    if parts[0] == ":::" and len(parts) == 2 and parts[1] in CONTAINER_TITLES:
+        return f"::: {parts[1]} {CONTAINER_TITLES[parts[1]]}"
+    return line
+
+
+LINK_PATTERN = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)\s]+)\)")
+
+
+def to_internal_page_link(target: str) -> str:
+    """Add `.md` to a link to another page; leave every other target as is."""
+    parts = urlsplit(target)
+    if parts.scheme or parts.netloc or not parts.path:
+        return target
+    last_segment = parts.path.rsplit("/", 1)[-1]
+    if not last_segment or "." in last_segment:
+        return target
+    return urlunsplit(parts._replace(path=f"{parts.path}.md"))
+
+
+def rewrite_internal_links(line: str) -> str:
+    """Point internal page links at their `.md` file, skipping image embeds."""
+    return LINK_PATTERN.sub(
+        lambda m: f"[{m.group(1)}]({to_internal_page_link(m.group(2))})", line
+    )
+
+
+def format_line(line: str) -> str:
+    """Apply the body formatting rules to one line."""
+    if line.strip().startswith("::: "):
+        line = format_container(line)
+    return rewrite_internal_links(line)
+
+
 def format_vitepress_markdown(content: str) -> str:
-    """Formate et améliore le contenu markdown VitePress en préservant ses fonctionnalités"""
-    lines = content.split("\n")
-    formatted_lines = []
-    in_frontmatter = False
-    frontmatter_lines = []
-
-    for line in lines:
-        # Préserver et améliorer le frontmatter YAML
-        if line.strip() == "---":
-            if not in_frontmatter:
-                in_frontmatter = True
-                frontmatter_lines.append(line)
-                continue
-            else:
-                in_frontmatter = False
-                # Ajouter des métadonnées manquantes si nécessaire
-                frontmatter_content = "\n".join(frontmatter_lines[1:])
-                if "lastUpdated:" not in frontmatter_content:
-                    frontmatter_lines.append("lastUpdated: true")
-                if "editLink:" not in frontmatter_content:
-                    frontmatter_lines.append("editLink: true")
-                frontmatter_lines.append(line)
-                formatted_lines.extend(frontmatter_lines)
-                frontmatter_lines = []
-                continue
-
-        if in_frontmatter:
-            frontmatter_lines.append(line)
-            continue
-
-        # Préserver et améliorer les containers VitePress
-        if line.strip().startswith("::: "):
-            container_type = line.strip().split(" ")[1]
-            # Ajouter des titres personnalisés si manquants
-            if container_type in ["tip", "warning", "danger", "info", "details"]:
-                if len(line.strip().split(" ")) == 2:  # Pas de titre personnalisé
-                    titles = {
-                        "tip": "Conseil",
-                        "warning": "Attention",
-                        "danger": "Important",
-                        "info": "Information",
-                        "details": "Détails",
-                    }
-                    line = f"::: {container_type} {titles.get(container_type, container_type.capitalize())}"
-
-        # Améliorer les liens internes VitePress
-        if "[" in line and "](" in line and not line.strip().startswith("!["):
-            # Vérifier si c'est un lien interne sans extension
-            link_pattern = r"\[([^\]]+)\]\(([^)]+)\)"
-            matches = re.findall(link_pattern, line)
-            for text, url in matches:
-                if (
-                    not url.startswith("http")
-                    and not url.startswith("#")
-                    and not url.endswith(".md")
-                ):
-                    if not url.endswith("/"):
-                        line = line.replace(f"]({url})", f"]({url}.md)")
-
-        formatted_lines.append(line)
-
-    return "\n".join(formatted_lines)
+    """Format VitePress Markdown while preserving its features."""
+    frontmatter, body = split_frontmatter(content.split("\n"))
+    formatted = format_frontmatter(frontmatter) if frontmatter is not None else []
+    in_code = False
+    for line in body:
+        # Fenced code is example content: leave it exactly as written.
+        if line.lstrip().startswith(("```", "~~~")):
+            in_code = not in_code
+            formatted.append(line)
+        else:
+            formatted.append(line if in_code else format_line(line))
+    return "\n".join(formatted)
 
 
 def add_vitepress_utilities(content: str) -> str:
-    """Ajoute des utilitaires VitePress pour améliorer la navigation et la présentation"""
+    """Add a default frontmatter and a table of contents when they are missing."""
     lines = content.split("\n")
     enhanced_lines = []
     has_frontmatter = False
 
-    # Vérifier si le frontmatter existe
     if lines and lines[0].strip() == "---":
         has_frontmatter = True
 
-    # Ajouter un frontmatter minimal si absent
+    # Add a minimal frontmatter when there is none
     if not has_frontmatter:
         enhanced_lines.extend(
             ["---", "outline: deep", "lastUpdated: true", "editLink: true", "---", ""]
@@ -156,10 +160,10 @@ def add_vitepress_utilities(content: str) -> str:
 
     enhanced_lines.extend(lines)
 
-    # Ajouter une table des matières si elle n'existe pas
+    # Add a table of contents when there is none
     content_str = "\n".join(enhanced_lines)
     if "[[toc]]" not in content_str.lower():
-        # Trouver la première section pour insérer la TOC
+        # Insert it after the first top-level heading
         for i, line in enumerate(enhanced_lines):
             if line.startswith("# ") and i > 0:
                 enhanced_lines.insert(i + 1, "")
@@ -171,7 +175,7 @@ def add_vitepress_utilities(content: str) -> str:
 
 
 def extract_vitepress_metadata(content: str) -> dict:
-    """Extrait les métadonnées VitePress du frontmatter"""
+    """Read the frontmatter keys and values into a dict."""
     metadata = {}
     lines = content.split("\n")
     in_frontmatter = False
@@ -191,325 +195,149 @@ def extract_vitepress_metadata(content: str) -> dict:
     return metadata
 
 
-async def format_vitepress_markdown_streaming(
-    content: str,
-) -> AsyncGenerator[str, None]:
-    """Formate le contenu VitePress en streaming avec des chunks de progression"""
-    yield (
-        json.dumps({"status": "starting", "message": "Début du formatage VitePress..."})
-        + "\n"
-    )
+@dataclass
+class FormatResult:
+    formatted_content: str
+    summary: str
+    word_count: int
+    sections: list[str]
+    warnings: list[str] = field(default_factory=list)
 
-    lines = content.split("\n")
-    formatted_lines = []
-    in_frontmatter = False
-    frontmatter_lines = []
-    total_lines = len(lines)
 
-    for i, line in enumerate(lines):
-        # Envoyer un chunk de progression tous les 50 lignes
-        if i % 50 == 0:
-            progress = (i / total_lines) * 30  # 30% pour le formatage VitePress
-            yield (
-                json.dumps(
-                    {
-                        "status": "formatting",
-                        "progress": progress,
-                        "message": f"Formatage VitePress: {i}/{total_lines} lignes...",
-                    }
-                )
-                + "\n"
-            )
-            await asyncio.sleep(0.01)  # Petite pause pour le streaming
-
-        # Préserver et améliorer le frontmatter YAML
-        if line.strip() == "---":
-            if not in_frontmatter:
-                in_frontmatter = True
-                frontmatter_lines.append(line)
-                continue
-            else:
-                in_frontmatter = False
-                # Ajouter des métadonnées manquantes si nécessaire
-                frontmatter_content = "\n".join(frontmatter_lines[1:])
-                if "lastUpdated:" not in frontmatter_content:
-                    frontmatter_lines.append("lastUpdated: true")
-                if "editLink:" not in frontmatter_content:
-                    frontmatter_lines.append("editLink: true")
-                frontmatter_lines.append(line)
-                formatted_lines.extend(frontmatter_lines)
-                frontmatter_lines = []
-                continue
-
-        if in_frontmatter:
-            frontmatter_lines.append(line)
-            continue
-
-        # Préserver et améliorer les containers VitePress
-        if line.strip().startswith("::: "):
-            container_type = line.strip().split(" ")[1]
-            if container_type in ["tip", "warning", "danger", "info", "details"]:
-                if len(line.strip().split(" ")) == 2:
-                    titles = {
-                        "tip": "Conseil",
-                        "warning": "Attention",
-                        "danger": "Important",
-                        "info": "Information",
-                        "details": "Détails",
-                    }
-                    line = f"::: {container_type} {titles.get(container_type, container_type.capitalize())}"
-
-        # Améliorer les liens internes VitePress
-        if "[" in line and "](" in line and not line.strip().startswith("!["):
-            link_pattern = r"\[([^\]]+)\]\(([^)]+)\)"
-            matches = re.findall(link_pattern, line)
-            for text, url in matches:
-                if (
-                    not url.startswith("http")
-                    and not url.startswith("#")
-                    and not url.endswith(".md")
-                ):
-                    if not url.endswith("/"):
-                        line = line.replace(f"]({url})", f"]({url}.md)")
-
-        formatted_lines.append(line)
-
-    formatted_content = "\n".join(formatted_lines)
-    yield (
-        json.dumps(
-            {
-                "status": "vitepress_done",
-                "progress": 30,
-                "message": "Formatage VitePress terminé",
-                "content_preview": formatted_content[:200] + "..."
-                if len(formatted_content) > 200
-                else formatted_content,
-            }
-        )
-        + "\n"
+def split_into_chunks(content: str) -> list[str]:
+    """Split a document into the pieces sent to the AI, without overlap."""
+    return MarkdownTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=0).split_text(
+        content
     )
 
 
-async def add_vitepress_utilities_streaming(content: str) -> AsyncGenerator[str, None]:
-    """Ajoute les utilitaires VitePress en streaming"""
-    yield (
-        json.dumps(
-            {
-                "status": "adding_utilities",
-                "progress": 40,
-                "message": "Ajout des utilitaires VitePress...",
-            }
-        )
-        + "\n"
+async def enhance_chunk(service: OpenAIService, chunk: str) -> str | None:
+    """Rewrite one piece with the AI; None when the reply hit the token limit."""
+    response = await service.chat_completion(
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": USER_PROMPT.format(content=chunk)},
+        ],
+        temperature=0.3,
+        max_tokens=MAX_TOKENS,
     )
-    await asyncio.sleep(0.1)
-
-    lines = content.split("\n")
-    enhanced_lines = []
-    has_frontmatter = False
-
-    if lines and lines[0].strip() == "---":
-        has_frontmatter = True
-
-    if not has_frontmatter:
-        enhanced_lines.extend(
-            ["---", "outline: deep", "lastUpdated: true", "editLink: true", "---", ""]
-        )
-        yield (
-            json.dumps({"status": "utilities", "message": "Frontmatter ajouté"}) + "\n"
-        )
-
-    enhanced_lines.extend(lines)
-
-    content_str = "\n".join(enhanced_lines)
-    if "[[toc]]" not in content_str.lower():
-        for i, line in enumerate(enhanced_lines):
-            if line.startswith("# ") and i > 0:
-                enhanced_lines.insert(i + 1, "")
-                enhanced_lines.insert(i + 2, "[[toc]]")
-                enhanced_lines.insert(i + 3, "")
-                yield (
-                    json.dumps(
-                        {"status": "utilities", "message": "Table des matières ajoutée"}
-                    )
-                    + "\n"
-                )
-                break
-
-    yield (
-        json.dumps(
-            {
-                "status": "utilities_done",
-                "progress": 50,
-                "message": "Utilitaires VitePress ajoutés",
-            }
-        )
-        + "\n"
-    )
+    choice = response["choices"][0]
+    if choice.get("finish_reason") == "length":
+        return None
+    return choice["message"]["content"].strip()
 
 
-async def process_document_streaming(
+def _event(status: str, progress: float, message: str, **extra: Any) -> dict:
+    return {"status": status, "progress": progress, "message": message, **extra}
+
+
+def _preview(content: str) -> str:
+    return content[:200] + "..." if len(content) > 200 else content
+
+
+async def iter_format_document(
     content: str, clean: bool = True, enhance: bool = True
-) -> AsyncGenerator[str, None]:
-    """Traite un document complet en streaming avec AI"""
-    model_name = settings.openai_model
-    yield (
-        json.dumps(
-            {
-                "status": "start",
-                "progress": 0,
-                "message": f"Début du traitement du document avec {model_name}...",
-            }
-        )
-        + "\n"
-    )
+) -> AsyncGenerator[dict, None]:
+    """Run the format pipeline, yielding a progress event after each step.
 
-    current_content = content
+    The last event has the status "completed" and carries the result. Every
+    endpoint runs this one pipeline: the streaming ones forward the events, the
+    others keep the result (see `format_document`).
+    """
+    model_name = settings.openai_model or "AI"
+    warnings: list[str] = []
+    yield _event("start", 0, f"Début du traitement du document avec {model_name}...")
 
-    # Étape 1: Formatage VitePress
     if clean:
-        async for chunk in format_vitepress_markdown_streaming(current_content):
-            yield chunk
-        current_content = format_vitepress_markdown(current_content)
+        content = format_vitepress_markdown(content)
+        yield _event(
+            "vitepress_done",
+            30,
+            "Formatage VitePress terminé",
+            content_preview=_preview(content),
+        )
+        content = add_vitepress_utilities(content)
+        yield _event("utilities_done", 50, "Utilitaires VitePress ajoutés")
 
-        async for chunk in add_vitepress_utilities_streaming(current_content):
-            yield chunk
-        current_content = add_vitepress_utilities(current_content)
-
-    # Étape 2: Amélioration AI
-    enhanced_content = current_content
     if enhance:
-        enhanced_content_from_ai = None
-        async for chunk in enhance_content_with_ai_streaming(current_content):
-            chunk_data = json.loads(chunk.strip())
-            if "enhanced_content" in chunk_data:
-                enhanced_content_from_ai = chunk_data["enhanced_content"]
-            yield chunk
+        async for event in _iter_enhance(content, model_name, warnings):
+            if "enhanced_content" in event:
+                content = event["enhanced_content"]
+            yield event
 
-        if enhanced_content_from_ai:
-            enhanced_content = enhanced_content_from_ai
-        else:
-            enhanced_content = await enhance_content_with_ai(current_content)
+    yield _event("finalizing", 90, "Finalisation du document...")
 
-    # Étape 3: Finalisation
-    yield (
-        json.dumps(
-            {
-                "status": "finalizing",
-                "progress": 90,
-                "message": "Finalisation du document...",
-            }
-        )
-        + "\n"
+    sections = extract_sections(content)
+    word_count = len(content.split())
+    result = FormatResult(
+        formatted_content=content,
+        summary=f"Document formaté avec {model_name}: {len(sections)} sections et {word_count} mots",
+        word_count=word_count,
+        sections=sections,
+        warnings=warnings,
+    )
+    yield _event(
+        "completed", 100, "Traitement terminé avec succès", result=asdict(result)
     )
 
-    sections = extract_sections(enhanced_content)
-    word_count = len(enhanced_content.split())
 
-    yield (
-        json.dumps(
-            {
-                "status": "analyzing",
-                "progress": 95,
-                "message": f"Analyse terminée: {len(sections)} sections, {word_count} mots",
-            }
-        )
-        + "\n"
-    )
-
-    # Résultat final
-    final_result = {
-        "status": "completed",
-        "progress": 100,
-        "message": "Traitement terminé avec succès",
-        "result": {
-            "formatted_content": enhanced_content,
-            "summary": f"Document formaté avec {model_name}: {len(sections)} sections et {word_count} mots",
-            "word_count": word_count,
-            "sections": sections,
-        },
-    }
-
-    yield json.dumps(final_result) + "\n"
-
-
-async def enhance_content_with_ai_streaming(content: str) -> AsyncGenerator[str, None]:
-    """Améliore le contenu avec AI en streaming"""
+async def _iter_enhance(
+    content: str, model_name: str, warnings: list[str]
+) -> AsyncGenerator[dict, None]:
+    """Enhance the document piece by piece; a piece that fails is kept as is."""
     try:
-        # Vérifier que le service AI est disponible
-        health = await openai_service.health_check()
-        if health["status"] != "healthy":
-            yield (
-                json.dumps(
-                    {
-                        "status": "ai_skipped",
-                        "progress": 90,
-                        "message": f"Service AI non disponible ({health.get('error', 'Unknown error')}), amélioration ignorée",
-                    }
+        service = get_openai_service()
+        health = await service.health_check()
+    except Exception:
+        logger.exception("AI service unavailable")
+        health = {"status": "unhealthy", "error": "client error"}
+
+    if health["status"] != "healthy":
+        error = health.get("error", "Unknown error")
+        message = f"Service AI non disponible ({error}), amélioration ignorée"
+        logger.warning("AI service unhealthy, enhancement skipped: %s", error)
+        warnings.append(message)
+        yield _event("ai_skipped", 90, message)
+        return
+
+    yield _event("ai_starting", 60, f"Amélioration avec {model_name} en cours...")
+
+    chunks = split_into_chunks(content)
+    enhanced_chunks = []
+    for i, chunk in enumerate(chunks):
+        label = f"chunk {i + 1}/{len(chunks)}"
+        yield _event(
+            "ai_processing",
+            60 + (i / len(chunks)) * 25,
+            f"Traitement {model_name}: {label}",
+        )
+        try:
+            enhanced = await enhance_chunk(service, chunk)
+        except Exception:
+            logger.exception("AI enhancement failed for %s", label)
+            enhanced = None
+            warnings.append(f"Erreur AI sur le {label}, contenu original conservé")
+        else:
+            if enhanced is None:
+                logger.warning("AI reply truncated by the token limit for %s", label)
+                warnings.append(
+                    f"Réponse AI tronquée (limite de tokens) sur le {label}, contenu original conservé"
                 )
-                + "\n"
-            )
-            return
+        enhanced_chunks.append(enhanced if enhanced is not None else chunk)
 
-        model_name = settings.openai_model or "AI"
-        yield (
-            json.dumps(
-                {
-                    "status": "ai_starting",
-                    "progress": 60,
-                    "message": f"Amélioration avec {model_name} en cours...",
-                }
-            )
-            + "\n"
-        )
+    yield _event(
+        "ai_done",
+        85,
+        f"Amélioration {model_name} terminée",
+        enhanced_content="\n\n".join(enhanced_chunks),
+    )
 
-        # Diviser le contenu en chunks pour le traitement
-        splitter = MarkdownTextSplitter(chunk_size=3000, chunk_overlap=200)
-        chunks = splitter.split_text(content)
 
-        enhanced_chunks = []
-        total_chunks = len(chunks)
-
-        for i, chunk in enumerate(chunks):
-            progress = 60 + (i / total_chunks) * 25  # 60% à 85%
-            yield (
-                json.dumps(
-                    {
-                        "status": "ai_processing",
-                        "progress": progress,
-                        "message": f"Traitement {model_name}: chunk {i + 1}/{total_chunks}",
-                    }
-                )
-                + "\n"
-            )
-
-            enhanced_chunk = await enhance_content_with_ai(chunk)
-            enhanced_chunks.append(enhanced_chunk)
-
-            await asyncio.sleep(0.2)
-
-        enhanced_content = "\n\n".join(enhanced_chunks)
-        yield (
-            json.dumps(
-                {
-                    "status": "ai_done",
-                    "progress": 85,
-                    "message": f"Amélioration {model_name} terminée",
-                    "enhanced_content": enhanced_content,
-                }
-            )
-            + "\n"
-        )
-
-    except Exception as e:
-        yield (
-            json.dumps(
-                {
-                    "status": "ai_error",
-                    "progress": 85,
-                    "message": f"Erreur AI: {str(e)}, contenu original conservé",
-                    "enhanced_content": content,
-                }
-            )
-            + "\n"
-        )
+async def format_document(
+    content: str, clean: bool = True, enhance: bool = True
+) -> FormatResult:
+    """Run the format pipeline and return its result."""
+    async for event in iter_format_document(content, clean, enhance):
+        if event["status"] == "completed":
+            return FormatResult(**event["result"])
+    raise RuntimeError("Format pipeline ended without a result")
