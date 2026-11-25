@@ -1,14 +1,20 @@
 name: CI
 
-pull_request:
-  types:
-  - opened
-  - reopened
-  - synchronize
-  - ready_for_review
-  branches:
-  - "**"
-workflow_dispatch:
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   lint:
