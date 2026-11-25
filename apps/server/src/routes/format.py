@@ -21,9 +21,7 @@ async def run_pipeline(content: str, clean: bool, enhance: bool) -> FormatResult
         return await format_document(content, clean=clean, enhance=enhance)
     except Exception as e:
         logger.exception("Formatting failed")
-        raise HTTPException(
-            status_code=500, detail=f"Erreur lors du formatage : {e}"
-        ) from e
+        raise HTTPException(status_code=500, detail="Erreur lors du formatage") from e
 
 
 def stream_pipeline(content: str, clean: bool, enhance: bool) -> StreamingResponse:
@@ -31,14 +29,14 @@ def stream_pipeline(content: str, clean: bool, enhance: bool) -> StreamingRespon
         try:
             async for event in iter_format_document(content, clean, enhance):
                 yield json.dumps(event) + "\n"
-        except Exception as e:
+        except Exception:
             # The response has started: report the failure as the last event.
             logger.exception("Streaming formatting failed")
             yield (
                 json.dumps(
                     {
                         "status": "error",
-                        "message": f"Erreur lors du formatage streaming : {e}",
+                        "message": "Erreur lors du formatage streaming",
                     }
                 )
                 + "\n"

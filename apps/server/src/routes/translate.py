@@ -36,9 +36,7 @@ async def translate_file(
         )
     except Exception as e:
         logger.exception("Translation failed")
-        raise HTTPException(
-            status_code=500, detail=f"Error translating file: {e}"
-        ) from e
+        raise HTTPException(status_code=500, detail="Error translating file") from e
 
     return TranslateResponse(
         translated_content=translated_text,

@@ -100,7 +100,9 @@ def format_container(line: str) -> str:
     return line
 
 
-LINK_PATTERN = re.compile(r"(?<!!)\[([^\]]*)\]\(([^)\s]+)\)")
+# Link text holds no brackets and targets no parentheses: each match attempt
+# stops at the next one, which keeps the scan linear on any input.
+LINK_PATTERN = re.compile(r"(?<!!)\[([^\[\]]*)\]\(([^()\s]+)\)")
 
 
 def to_internal_page_link(target: str) -> str:

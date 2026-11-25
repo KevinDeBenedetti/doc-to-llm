@@ -86,3 +86,12 @@ def test_frontmatter_key_inside_another_key_still_gets_default():
     content = "---\nxlastUpdated: 1\n---\nBody"
 
     assert "\nlastUpdated: true\n" in format_vitepress_markdown(content)
+
+
+def test_link_rewrite_stays_linear_on_adversarial_input():
+    import time
+
+    for line in ("[" + "[\\" * 50_000, "[](" + "[](!" * 50_000):
+        start = time.perf_counter()
+        format_vitepress_markdown(line)
+        assert time.perf_counter() - start < 1
