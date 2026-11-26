@@ -24,7 +24,7 @@ RUN uv sync --locked --no-dev --no-install-project
 COPY main.py ./
 COPY src/ ./src
 
-# The app writes server.log and the SQLite database in its working directory.
+# The app writes a relative LOG_FILE, when one is set, in its working directory.
 RUN chown app:app /app
 
 FROM base AS dev

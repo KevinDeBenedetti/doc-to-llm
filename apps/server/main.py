@@ -1,27 +1,16 @@
-from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from src.core.config import settings
 from src.core.logger import setup_logging
 from src.routes import openai, translate, format
 
-from src.core import database
-
-setup_logging()
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    database.create_db_and_tables()
-    yield
-
+setup_logging(log_file=settings.log_file)
 
 app = FastAPI(
     title="doc-to-llm",
     description="A FastAPI application for document translation and language model interaction.",
     version="0.0.1",
-    lifespan=lifespan,
 )
 
 app.add_middleware(
