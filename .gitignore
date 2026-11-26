@@ -5,6 +5,7 @@
 # Logs
 logs
 *.log
+*.log.[0-9]*
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -311,5 +312,3 @@ poetry.toml
 pyrightconfig.json
 
 # End of https://www.toptal.com/developers/gitignore/api/python,node
-# SQLite database created by the server
-*.db

@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     openai_api_key: str
     openai_base_url: str | None = None
     openai_model: str | None = None
+    log_file: str | None = None
 
 
 settings = Settings()

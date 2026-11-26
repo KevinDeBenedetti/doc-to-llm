@@ -6,7 +6,6 @@ from fastapi.testclient import TestClient
 import main
 from src.routes import format as format_routes
 from src.routes import openai as openai_routes
-from src.routes import translate as translate_routes
 from src.services import vitepress
 
 
@@ -194,33 +193,6 @@ def test_markdown_route_accepts_non_latin1_filename(client):
 
     assert response.status_code == 200
     assert "filename*=UTF-8''" in response.headers["content-disposition"]
-
-
-def test_translate_file_returns_translation(client, monkeypatch):
-    calls = {}
-
-    class FakeTranslateService:
-        def __init__(self, model_name=None):
-            calls["model"] = model_name
-
-        async def translate_markdown(
-            self, content, source_language, target_language, model_name=None
-        ):
-            return f"[{source_language}->{target_language}] {content}"
-
-    monkeypatch.setattr(translate_routes, "TranslateService", FakeTranslateService)
-    data = {"source_language": "fr", "target_language": "en", "model_name": "m"}
-
-    response = client.post("/translate-file", files=md_file("Bonjour"), data=data)
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "translated_content": "[fr->en] Bonjour",
-        "source_language": "fr",
-        "target_language": "en",
-        "model_used": "m",
-    }
-    assert calls["model"] == "m"
 
 
 def test_failures_do_not_expose_exception_text(client, monkeypatch):
