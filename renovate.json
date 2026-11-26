@@ -1,0 +1,39 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "This repository's own updates, on top of the shared preset KevinDeBenedetti/renovate-config (Monday-morning schedule, best practices, SHA-pinned actions and images, 3-day soak, OSV security updates, labels). Replaces Dependabot: every update of the week, majors included, lands in one pull request.",
+  "extends": ["github>KevinDeBenedetti/renovate-config"],
+  "separateMajorMinor": false,
+  "separateMultipleMajor": false,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "The uv version the CI installs (`version:` of astral-sh/setup-uv in lint.yaml and test.yaml), marked with `# renovate: datasource=… depName=…` on the line above: the github-actions manager only reads `uses:` refs, so without it the CI's uv would drift from the one in apps/server/Dockerfile.",
+      "managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/"],
+      "matchStrings": [
+        "#\\s*renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s*\\n\\s*version:\\s*\"(?<currentValue>[^\"]+)\""
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Renovate gets a release date from Docker Hub only: the ghcr.io/astral-sh/uv image of the Dockerfile would never pass the preset's soak.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/**"],
+      "minimumReleaseAgeBehaviour": "timestamp-optional"
+    },
+    {
+      "description": "One pull request for everything (branch renovate/all-dependencies): the preset's weekly non-major group, widened to majors, so a week's updates run CI once and are reviewed together. separateMajorMinor and separateMultipleMajor are off above, or the majors would still get a branch of their own. A major gets the preset's `major` label on the group PR; one failing update holds the whole group: exclude it from the Dependency Dashboard, or give it `\"groupName\": null`.",
+      "matchPackageNames": ["*"],
+      "groupName": "all dependencies",
+      "groupSlug": "all-dependencies",
+      "semanticCommitType": "chore"
+    },
+    {
+      "description": "The Python runtime moves on purpose, with the CI's PYTHON_VERSION and requires-python in apps/server/pyproject.toml, not in the weekly batch: the python image gets patches and digests only.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["python"],
+      "matchUpdateTypes": ["major", "minor"],
+      "enabled": false
+    }
+  ]
+}
