@@ -5,53 +5,12 @@ from fastapi.testclient import TestClient
 
 import main
 from src.routes import format as format_routes
-from src.routes import openai as openai_routes
-from src.services import vitepress
-
-
-class FakeAIService:
-    """Stands in for OpenAIService: no network, records every prompt."""
-
-    def __init__(self, healthy=True, finish_reason="stop"):
-        self.healthy = healthy
-        self.finish_reason = finish_reason
-        self.prompts = []
-        self.health_checks = 0
-
-    async def health_check(self):
-        self.health_checks += 1
-        if self.healthy:
-            return {"status": "healthy", "model": "test-model", "models_available": 1}
-        return {"status": "unhealthy", "error": "down"}
-
-    async def get_models(self):
-        return [{"id": "test-model"}]
-
-    async def chat_completion(self, messages, **kwargs):
-        prompt = messages[-1]["content"]
-        self.prompts.append(prompt)
-        chunk = prompt.split("\n\n", 1)[1].rsplit("\n\nInstructions", 1)[0]
-        return {
-            "choices": [
-                {
-                    "finish_reason": self.finish_reason,
-                    "message": {"content": chunk.upper()},
-                }
-            ]
-        }
-
-
-@pytest.fixture
-def ai(monkeypatch):
-    service = FakeAIService()
-    monkeypatch.setattr(vitepress, "get_openai_service", lambda: service)
-    monkeypatch.setattr(openai_routes, "OpenAIService", lambda: service)
-    return service
+from tests.conftest import API_KEY
 
 
 @pytest.fixture
 def client(ai):
-    return TestClient(main.app)
+    return TestClient(main.app, headers={"X-API-Key": API_KEY})
 
 
 def md_file(content="# Title\n\nBody", name="doc.md"):

@@ -9,6 +9,7 @@ import main
 from src.core.config import settings
 from src.services import translate
 from src.services.translate import TranslateService
+from tests.conftest import API_KEY
 
 
 class FakeChatModel:
@@ -47,7 +48,7 @@ def llm(monkeypatch):
 
 @pytest.fixture
 def client(llm):
-    return TestClient(main.app)
+    return TestClient(main.app, headers={"X-API-Key": API_KEY})
 
 
 def run_translation(content):
