@@ -4,6 +4,11 @@
   "extends": ["github>KevinDeBenedetti/renovate-config"],
   "separateMajorMinor": false,
   "separateMultipleMajor": false,
+  "vulnerabilityAlerts": {
+    "description": "Every security fix in one pull request (branch renovate/security-updates) instead of one per package: Renovate's default for vulnerability alerts is `groupName: null`. Kept apart from the weekly `all dependencies` group, since security fixes skip the schedule and the soak. Merged with the preset's own vulnerabilityAlerts, which adds the `security` label. One failing fix holds back the whole group.",
+    "groupName": "security updates",
+    "groupSlug": "security-updates"
+  },
   "customManagers": [
     {
       "customType": "regex",
