@@ -29,6 +29,8 @@ Fill in `.env`:
 | Variable          | Required | Purpose                                                    |
 | ----------------- | -------- | ---------------------------------------------------------- |
 | `OPENAI_API_KEY`  | yes      | API key of the endpoint                                    |
+| `API_KEYS`        | yes      | Comma-separated keys clients send in `X-API-Key`; without one, every route but `/healthz` answers `401` |
+| `ENV`             | no       | `dev` (default) or `prod`; `prod` refuses to start without `API_KEYS`, and the prod image sets it |
 | `OPENAI_BASE_URL` | no       | Endpoint URL; empty means `api.openai.com`                 |
 | `OPENAI_MODEL`    | no       | Model for enhancement, and the default for translation     |
 | `LOG_FILE`        | no       | Also log to this file, rotated at 10 MB (3 backups); logs always go to stdout |
@@ -39,10 +41,12 @@ Fill in `.env`:
 make start
 ```
 
-The API listens on `http://localhost:8000`; its interactive OpenAPI docs are at `/docs`. Code edits under `apps/server` reload the server.
+The API listens on `http://localhost:8000`, on the loopback interface only; its interactive OpenAPI docs are at `/docs`. Code edits under `apps/server` reload the server.
+
+Every route that reaches the LLM requires one of `API_KEYS` in the `X-API-Key` header, and answers `401` without it:
 
 ```sh
-curl -F file=@guide.md "http://localhost:8000/format/doc/markdown?enhance=false"
+curl -H "X-API-Key: $API_KEY" -F file=@guide.md "http://localhost:8000/format/doc/markdown?enhance=false"
 ```
 
 | Route                         | Does                                              |
@@ -52,6 +56,7 @@ curl -F file=@guide.md "http://localhost:8000/format/doc/markdown?enhance=false"
 | `POST /format/doc[/text]/stream`   | Same, streaming NDJSON progress events       |
 | `POST /translate-file`        | Translate an uploaded file                        |
 | `GET /openai/health`, `/openai/models` | Check the LLM endpoint                   |
+| `GET /healthz`                | Liveness check: no key, no LLM call               |
 
 ## Development
 

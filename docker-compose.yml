@@ -8,7 +8,8 @@ services:
       dockerfile: Dockerfile
       target: dev
     ports:
-      - "8000:8000"
+      # Loopback only: the API spends the LLM quota of whoever runs it.
+      - "127.0.0.1:8000:8000"
     volumes:
       # Live code for --reload; the image keeps its virtualenv in /opt/venv.
       - ./apps/server:/app
