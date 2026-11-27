@@ -1,8 +1,10 @@
 from pydantic import BaseModel
 
+from src.schemas.content import BoundedContent
+
 
 class DocumentRequest(BaseModel):
-    content: str
+    content: BoundedContent
     enhance: bool = True
     clean: bool = True
 
