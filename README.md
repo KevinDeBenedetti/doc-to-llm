@@ -34,6 +34,9 @@ Fill in `.env`:
 | `OPENAI_BASE_URL` | no       | Endpoint URL; empty means `api.openai.com`                 |
 | `OPENAI_MODEL`    | no       | Model for enhancement, and the default for translation     |
 | `LOG_FILE`        | no       | Also log to this file, rotated at 10 MB (3 backups); logs always go to stdout |
+| `CORS_ORIGINS`    | no       | Comma-separated browser origins allowed to call the API; empty (default) turns CORS off, `*` is refused |
+| `MAX_UPLOAD_BYTES` | no      | Largest upload, in bytes (default 10 MiB); larger ones get `413` |
+| `MAX_CONTENT_CHARS` | no     | Largest document, in characters (default 200,000); a longer upload gets `413`, a longer JSON `content` gets `422` |
 
 ## Usage
 

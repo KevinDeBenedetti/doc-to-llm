@@ -1,7 +1,7 @@
 from fastapi import Depends, FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from src.core.config import settings
+from src.core.cors import add_cors
 from src.core.logger import setup_logging
 from src.core.security import require_api_key
 from src.routes import openai, translate, format
@@ -14,13 +14,7 @@ app = FastAPI(
     version="0.0.1",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+add_cors(app, settings.cors_origins)
 
 # Every route that reaches the LLM requires a key from API_KEYS.
 protected = [Depends(require_api_key)]

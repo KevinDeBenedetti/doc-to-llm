@@ -1,16 +1,7 @@
 import json
 
-import pytest
-from fastapi.testclient import TestClient
 
-import main
 from src.routes import format as format_routes
-from tests.conftest import API_KEY
-
-
-@pytest.fixture
-def client(ai):
-    return TestClient(main.app, headers={"X-API-Key": API_KEY})
 
 
 def md_file(content="# Title\n\nBody", name="doc.md"):

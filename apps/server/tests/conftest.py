@@ -53,3 +53,13 @@ def ai(monkeypatch):
     monkeypatch.setattr(vitepress, "get_openai_service", lambda: service)
     monkeypatch.setattr(openai_routes, "OpenAIService", lambda: service)
     return service
+
+
+@pytest.fixture
+def client(ai):
+    """A client of the app that sends a valid API key, with the LLM faked."""
+    from fastapi.testclient import TestClient
+
+    import main
+
+    return TestClient(main.app, headers={"X-API-Key": API_KEY})
